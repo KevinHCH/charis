@@ -7,8 +7,9 @@ import { VercelGeminiProvider } from '../providers/vercelGemini';
 export function registerCaption(program: Command) {
   program
     .command('caption')
+    .alias('cap')
     .description('Generate a caption or reverse prompt for an image')
-    .requiredOption('--image <path>', 'Image path or URL')
+    .requiredOption('-i, --image <path>', 'Image path or URL')
     .action(async options => {
       const cfg = await loadConfig();
       const apiKey = await getApiKey();

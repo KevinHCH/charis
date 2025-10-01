@@ -12,13 +12,14 @@ import { writeHistory } from '../core/history';
 export function registerEdit(program: Command) {
   program
     .command('edit')
+    .alias('ed')
     .description('Edit a local or remote image with an instruction')
-    .requiredOption('--image <paths...>', 'One or more image paths or URLs')
-    .requiredOption('--instruction <instruction>', 'Editing instruction to apply')
-    .option('--size <widthxheight>', 'Target size in the format WIDTHxHEIGHT')
-    .option('--format <format>', 'Output format (png|jpg|webp)')
-    .option('--quality <quality>', 'Image quality between 0-100')
-    .option('--out <dir>', 'Directory where images will be written')
+    .requiredOption('-i, --image <paths...>', 'One or more image paths or URLs')
+    .requiredOption('-t, --instruction <instruction>', 'Editing instruction to apply')
+    .option('-s, --size <widthxheight>', 'Target size in the format WIDTHxHEIGHT')
+    .option('-f, --format <format>', 'Output format (png|jpg|webp)')
+    .option('-q, --quality <quality>', 'Image quality between 0-100')
+    .option('-o, --out <dir>', 'Directory where images will be written')
     .action(async options => {
       const cfg = await loadConfig();
       const apiKey = await getApiKey();

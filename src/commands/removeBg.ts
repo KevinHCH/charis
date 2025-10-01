@@ -10,9 +10,10 @@ import { readInputImages } from '../image/io';
 export function registerRemoveBg(program: Command) {
   program
     .command('remove-bg')
+    .alias('rb')
     .description('Remove the background from an image')
-    .requiredOption('--image <path>', 'Image path or URL')
-    .option('--out <dir>', 'Directory where the processed image will be written')
+    .requiredOption('-i, --image <path>', 'Image path or URL')
+    .option('-o, --out <dir>', 'Directory where the processed image will be written')
     .action(async options => {
       const cfg = await loadConfig();
       const apiKey = await getApiKey();

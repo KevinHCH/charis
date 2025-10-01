@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import chalk from 'chalk';
 import { logger } from './core/logger';
 
@@ -23,6 +23,16 @@ export async function runCLI(registrars: RegisterCommand[], argv: string[]): Pro
   try {
     await program.parseAsync(['charis', ...argv]);
   } catch (error) {
+    if (error instanceof CommanderError) {
+      if (error.code === 'commander.helpDisplayed' || error.code === 'commander.version') {
+        return;
+      }
+
+      if (error.exitCode === 0) {
+        return;
+      }
+    }
+
     logger.error({ err: error }, 'CLI command failed');
     throw error;
   }

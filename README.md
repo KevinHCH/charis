@@ -24,17 +24,32 @@ bun run bin/charis.ts config show
 ## Quick start
 
 ```bash
-bun run bin/charis.ts generate --prompt "minimalist living room with natural light" --count 2 --size 1024x1024
-bun run bin/charis.ts edit --image ./photo.jpg --instruction "change the background to a sunset"
-bun run bin/charis.ts merge --image ./a.png,./b.jpg --layout horizontal
+# Generate with either a positional prompt or --prompt/-p
+charis generate "minimalist living room with natural light" --count 2 --size 1024x1024
+charis gen -p "vibrant cyberpunk skyline at dusk"
+
+# Edit and merge utilities with concise aliases and flags
+charis ed -i ./photo.jpg -t "change the background to a sunset"
+charis mg -i ./a.png ./b.jpg --layout horizontal
 ```
 
-To list every available command run:
+Display contextual help without triggering an error:
 
 ```bash
-bun run bin/charis.ts --help
-
+charis --help
+charis generate --help
 ```
+
+Every command has an alias. Some highlights:
+
+| Primary | Alias | Notes |
+|---------|-------|-------|
+| `generate` | `gen` | Accepts positional prompts |
+| `improve` | `imp` | Enhances prompts and supports `-o` to save |
+| `edit` | `ed` | Variadic `-i/--image` inputs with rich instructions |
+| `merge` | `mg` | Blend or align images via `--layout` |
+| `caption` | `cap` | Reverse-prompt or caption existing assets |
+| `config` | `cfg` | Initialize, inspect, or update settings |
 
 ## Defaults
 

@@ -4,7 +4,7 @@ import { loadConfig, saveConfig } from '../config/config';
 import { setApiKey } from '../config/keychain';
 
 export function registerConfig(program: Command) {
-  const cmd = program.command('config').description('Manage Charis configuration');
+  const cmd = program.command('config').alias('cfg').description('Manage Charis configuration');
 
   cmd
     .command('init')

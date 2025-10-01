@@ -19,7 +19,7 @@ export function parseNumber(value: string | undefined, fallback: number): number
 
 export function ensurePrompt(prompt?: string): string {
   if (!prompt?.trim()) {
-    throw new Error('A prompt is required (--prompt).');
+    throw new Error('A prompt is required. Use --prompt or supply it as a positional argument.');
   }
   return prompt;
 }

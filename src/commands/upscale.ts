@@ -11,10 +11,11 @@ import { parseNumber } from '../core/validation';
 export function registerUpscale(program: Command) {
   program
     .command('upscale')
+    .alias('up')
     .description('Increase the resolution of an image')
-    .requiredOption('--image <path>', 'Image path or URL')
-    .option('--factor <factor>', 'Upscale factor', '2')
-    .option('--out <dir>', 'Directory where the upscaled image will be written')
+    .requiredOption('-i, --image <path>', 'Image path or URL')
+    .option('-f, --factor <factor>', 'Upscale factor', '2')
+    .option('-o, --out <dir>', 'Directory where the upscaled image will be written')
     .action(async options => {
       const cfg = await loadConfig();
       const apiKey = await getApiKey();

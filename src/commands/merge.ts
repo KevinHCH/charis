@@ -10,11 +10,12 @@ import { parseNumber } from '../core/validation';
 export function registerMerge(program: Command) {
   program
     .command('merge')
+    .alias('mg')
     .description('Merge two images with different layouts')
-    .requiredOption('--image <paths...>', 'Two or more image paths or URLs', value => value.split(','))
-    .option('--layout <layout>', 'Layout to use (horizontal|blend)', 'blend')
-    .option('--opacity <value>', 'Opacity used when blending images', '0.5')
-    .option('--out <dir>', 'Directory where the merged image will be written')
+    .requiredOption('-i, --image <paths...>', 'Two or more image paths or URLs')
+    .option('-l, --layout <layout>', 'Layout to use (horizontal|blend)', 'blend')
+    .option('-p, --opacity <value>', 'Opacity used when blending images', '0.5')
+    .option('-o, --out <dir>', 'Directory where the merged image will be written')
     .action(async options => {
       const cfg = await loadConfig();
       const images = Array.isArray(options.image) ? options.image.flat() : [options.image];

@@ -5,6 +5,7 @@ import { loadPreset } from '../core/presets';
 export function registerPresets(program: Command) {
   program
     .command('presets')
+    .alias('pre')
     .description('Inspect prompt presets from YAML files')
     .argument('<path>', 'Path to the preset YAML file')
     .action(async (path: string) => {

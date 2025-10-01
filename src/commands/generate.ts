@@ -12,21 +12,24 @@ import { logger } from '../core/logger';
 export function registerGenerate(program: Command) {
   program
     .command('generate')
+    .alias('gen')
     .description('Generate images from a prompt')
-    .requiredOption('-p, --prompt <prompt>', 'Prompt to send to Gemini')
+    .argument('[prompt...]', 'Prompt to send to Gemini')
+    .option('-p, --prompt <prompt>', 'Prompt to send to Gemini')
     .option('-n, --count <count>', 'Number of images to generate (default: 1)', '1')
     .option('--size <widthxheight>', 'Target size in the format WIDTHxHEIGHT')
     .option('--format <format>', 'Output format (png|jpg|webp)')
     .option('--quality <quality>', 'Image quality between 0-100')
     .option('--out <dir>', 'Directory where images will be written')
-    .action(async options => {
+    .action(async (promptWords: string[], options) => {
       const cfg = await loadConfig();
       const apiKey = await getApiKey();
       if (!apiKey) {
         throw new Error('GEMINI_API_KEY is not set. Run "charis config set-key GEMINI <API_KEY>".');
       }
 
-      const prompt = ensurePrompt(options.prompt);
+      const promptFromArgs = promptWords.join(' ').trim();
+      const prompt = ensurePrompt(options.prompt ?? promptFromArgs);
       const n = parseNumber(options.count, 1);
       const size = options.size ? parseSize(options.size) : undefined;
       const format = (options.format ?? cfg.format) as typeof cfg.format;

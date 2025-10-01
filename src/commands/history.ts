@@ -6,6 +6,7 @@ import { historyPath } from '../core/history';
 export function registerHistory(program: Command) {
   program
     .command('history')
+    .alias('hist')
     .description('Print the execution history')
     .action(async () => {
       const path = historyPath();
