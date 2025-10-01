@@ -9,10 +9,10 @@ type LevelStyle = {
 
 const levelStyles: Record<number, LevelStyle> = {
   10: { label: 'TRACE', color: chalk.gray },
-  20: { label: 'DEBUG', color: chalk.blue },
+  20: { label: 'DEBUG', color: chalk.magenta },
   30: { label: 'INFO', color: chalk.green },
   40: { label: 'WARN', color: chalk.yellow },
-  50: { label: 'DANGER', color: chalk.redBright },
+  50: { label: 'DANGER', color: chalk.red },
   60: { label: 'FATAL', color: chalk.bgRed.white },
 };
 
