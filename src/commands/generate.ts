@@ -12,7 +12,7 @@ import { logger } from '../core/logger';
 export function registerGenerate(program: Command) {
   program
     .command('generate')
-    .alias('gen')
+    .aliases(['gen', 'g'])
     .description('Generate images from a prompt')
     .argument('[prompt...]', 'Prompt to send to Gemini')
     .option('-p, --prompt <prompt>', 'Prompt to send to Gemini')
@@ -21,7 +21,23 @@ export function registerGenerate(program: Command) {
     .option('--format <format>', 'Output format (png|jpg|webp)')
     .option('--quality <quality>', 'Image quality between 0-100')
     .option('--out <dir>', 'Directory where images will be written')
-    .action(async (promptWords: string[], options) => {
+    .action(async (
+      promptWords: string[],
+      options: {
+        prompt?: string;
+        count?: string;
+        size?: string;
+        format?: string;
+        quality?: string;
+        out?: string;
+      },
+      command: Command,
+    ) => {
+      if (promptWords.length === 1 && promptWords[0].toLowerCase() === 'help') {
+        command.help({ error: false });
+        return;
+      }
+
       const cfg = await loadConfig();
       const apiKey = await getApiKey();
       if (!apiKey) {

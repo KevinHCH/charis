@@ -38,7 +38,14 @@ Display contextual help without triggering an error:
 ```bash
 charis --help
 charis generate --help
+charis gen help
 ```
+
+### Troubleshooting key storage
+
+- If your system does not provide a native keychain (for example missing `libsecret` on Linux), set
+  `CHARIS_DISABLE_KEYTAR=1` to store API keys alongside your Charis configuration or rely on
+  environment variables such as `GEMINI_API_KEY`.
 
 Every command has an alias. Some highlights:
 
