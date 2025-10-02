@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, type GenerateContentResult } from '@google/generative-ai';
-import { ImageProvider, GenerateOpts, EditOpts } from './provider';
+import { ImageProvider, GenerateOpts, EditOpts, type ImgFormat } from './provider';
 import { withRetry } from '../core/retry';
 import { logger } from '../core/logger';
 
@@ -42,6 +42,7 @@ export class GeminiNativeProvider implements ImageProvider {
 
   private async generateNative(opts: GenerateOpts): Promise<Buffer[]> {
     const model = this.assertNative().getGenerativeModel({ model: this.model });
+    const expected = Math.max(1, opts.n ?? 1);
     const res = await model.generateContent({
       contents: [
         {
@@ -49,8 +50,12 @@ export class GeminiNativeProvider implements ImageProvider {
           parts: [{ text: opts.prompt }],
         },
       ],
+      generationConfig: {
+        candidateCount: expected,
+        responseMimeType: formatToMimeType(opts.format),
+      },
     });
-    return extractImageBuffers(res, opts.n ?? 1);
+    return extractImageBuffers(res, expected);
   }
 
   private async editNative(opts: EditOpts): Promise<Buffer[]> {
@@ -59,13 +64,20 @@ export class GeminiNativeProvider implements ImageProvider {
       ...opts.images.map(image => ({
         inlineData: {
           data: image.toString('base64'),
-          mimeType: 'image/png',
+          mimeType: detectMimeType(image, opts.format),
         },
       })),
       { text: opts.instruction },
     ];
-    const res = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    return extractImageBuffers(res, opts.images.length);
+    const expected = Math.max(1, opts.images.length);
+    const res = await model.generateContent({
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        candidateCount: expected,
+        responseMimeType: formatToMimeType(opts.format),
+      },
+    });
+    return extractImageBuffers(res, expected);
   }
 
   private async captionNative(opts: { image: Buffer }): Promise<string> {
@@ -117,4 +129,32 @@ function extractText(res: GenerateContentResult): string {
     .join(' ')
     .trim();
   return text ?? '';
+}
+
+function formatToMimeType(format: ImgFormat | undefined): string {
+  switch (format) {
+    case 'jpg':
+      return 'image/jpeg';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/png';
+  }
+}
+
+function detectMimeType(image: Buffer, requestedFormat: ImgFormat | undefined): string {
+  if (requestedFormat) {
+    return formatToMimeType(requestedFormat);
+  }
+  const header = image.subarray(0, 12);
+  if (header.length >= 8 && header[0] === 0x89 && header[1] === 0x50) {
+    return 'image/png';
+  }
+  if (header.length >= 3 && header[0] === 0xff && header[1] === 0xd8) {
+    return 'image/jpeg';
+  }
+  if (header.length >= 12 && header.slice(0, 4).toString('ascii') === 'RIFF' && header.slice(8, 12).toString('ascii') === 'WEBP') {
+    return 'image/webp';
+  }
+  return 'image/png';
 }

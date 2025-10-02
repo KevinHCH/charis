@@ -133,6 +133,7 @@ export class VercelGeminiProvider implements ImageProvider {
 
   private async generateNative(opts: GenerateOpts): Promise<Buffer[]> {
     const model = this.assertNative().getGenerativeModel({ model: this.model });
+    const expected = Math.max(1, opts.n ?? 1);
     const res = await model.generateContent({
       contents: [
         {
@@ -140,9 +141,13 @@ export class VercelGeminiProvider implements ImageProvider {
           parts: [{ text: opts.prompt }],
         },
       ],
+      generationConfig: {
+        candidateCount: expected,
+        responseMimeType: formatToMimeType(opts.format),
+      },
     });
 
-    return extractImageBuffersFromGemini(res, opts.n ?? 1);
+    return extractImageBuffersFromGemini(res, expected);
   }
 
   private async editNative(opts: EditOpts): Promise<Buffer[]> {
@@ -156,8 +161,15 @@ export class VercelGeminiProvider implements ImageProvider {
       })),
       { text: opts.instruction },
     ];
-    const res = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    return extractImageBuffersFromGemini(res, opts.images.length);
+    const expected = Math.max(1, opts.images.length);
+    const res = await model.generateContent({
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        candidateCount: expected,
+        responseMimeType: formatToMimeType(opts.format),
+      },
+    });
+    return extractImageBuffersFromGemini(res, expected);
   }
 
   private async captionNative(opts: { image: Buffer }): Promise<string> {
