@@ -13,9 +13,9 @@ export function registerEdit(program: Command) {
   program
     .command('edit')
     .alias('ed')
-    .description('Edit a local or remote image with an instruction')
+    .description('Edit a local or remote image with a prompt')
     .requiredOption('-i, --image <paths...>', 'One or more image paths or URLs')
-    .requiredOption('-t, --instruction <instruction>', 'Editing instruction to apply')
+    .requiredOption('-p, --prompt <prompt>', 'Prompt describing the desired edit')
     .option('-s, --size <widthxheight>', 'Target size in the format WIDTHxHEIGHT')
     .option('-f, --format <format>', 'Output format (png|jpg|webp)')
     .option('-q, --quality <quality>', 'Image quality between 0-100')
@@ -28,7 +28,7 @@ export function registerEdit(program: Command) {
       }
 
       const images: string[] = Array.isArray(options.image) ? options.image : [options.image];
-      const instruction = options.instruction as string;
+      const prompt = options.prompt as string;
       const size = options.size ? parseSize(options.size) : undefined;
       const format = (options.format ?? cfg.format) as typeof cfg.format;
       const quality = parseNumber(options.quality, cfg.quality);
@@ -39,7 +39,7 @@ export function registerEdit(program: Command) {
       const providers = createGeminiChain(apiKey, { nativeModel: cfg.model, vercelModel: cfg.model });
       const { result: outputs } = await tryProviders(
         providers,
-        p => p.edit({ images: buffers, instruction, size, format, quality }),
+        p => p.edit({ images: buffers, instruction: prompt, size, format, quality }),
         output => Array.isArray(output) && output.length > 0,
         'image editing',
       );
@@ -53,6 +53,6 @@ export function registerEdit(program: Command) {
         console.log(`${chalk.green('✔')} saved ${chalk.cyan(path)}`);
       }
 
-      await writeHistory({ cmd: 'edit', instruction, images, files: saved, size, format, quality });
+      await writeHistory({ cmd: 'edit', prompt, images, files: saved, size, format, quality });
     });
 }

@@ -16,7 +16,7 @@ export function registerMerge(program: Command) {
     .description('Merge images using Gemini image editing')
     .requiredOption('-i, --image <paths...>', 'Two or more image paths or URLs')
     .option('-l, --layout <layout>', 'Layout hint (blend|horizontal|grid)', 'blend')
-    .option('-t, --instruction <text>', 'Custom instruction to send to Gemini')
+    .option('-p, --prompt <prompt>', 'Custom prompt to send to Gemini')
     .option('-s, --size <widthxheight>', 'Target size for the merged image (WIDTHxHEIGHT)')
     .option('-f, --format <format>', 'Output format (png|jpg|webp)')
     .option('-q, --quality <quality>', 'Image quality between 0-100')
@@ -34,18 +34,18 @@ export function registerMerge(program: Command) {
       }
 
       const layout = options.layout as string;
-      const instructionOverride = options.instruction as string | undefined;
+      const promptOverride = options.prompt as string | undefined;
       const outDir = options.out ?? defaultOutputDir(process.cwd(), cfg.outputDir);
       const size = options.size ? parseSize(options.size) : undefined;
       const format = (options.format ?? cfg.format) as typeof cfg.format;
       const quality = parseNumber(options.quality, cfg.quality);
 
-      const instruction = instructionOverride ?? buildInstruction(layout, bufs.length);
+      const prompt = promptOverride ?? buildPrompt(layout, bufs.length);
 
       const providers = createGeminiChain(apiKey, { nativeModel: cfg.model, vercelModel: cfg.model });
       const { result: outputs } = await tryProviders(
         providers,
-        p => p.edit({ images: bufs, instruction, size, format, quality }),
+        p => p.edit({ images: bufs, instruction: prompt, size, format, quality }),
         output => Array.isArray(output) && output.length > 0,
         'image merge',
       );
@@ -57,7 +57,7 @@ export function registerMerge(program: Command) {
 
       await writeHistory({
         cmd: 'merge',
-        instruction,
+        prompt,
         images,
         files: [path],
         size,
@@ -67,7 +67,7 @@ export function registerMerge(program: Command) {
     });
 }
 
-function buildInstruction(layout: string, count: number): string {
+function buildPrompt(layout: string, count: number): string {
   const normalized = (layout ?? '').toLowerCase();
   const plural = count > 2 ? `${count} images` : 'both images';
   switch (normalized) {

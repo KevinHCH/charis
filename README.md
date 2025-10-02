@@ -33,7 +33,7 @@ charis generate "minimalist living room with natural light" --count 2 --size 102
 charis gen -p "vibrant cyberpunk skyline at dusk"
 
 # Edit and merge utilities with concise aliases and flags
-charis ed -i ./photo.jpg -t "change the background to a sunset"
+charis ed -i ./photo.jpg -p "change the background to a sunset"
 charis mg -i ./a.png ./b.jpg --layout horizontal
 ```
 
@@ -72,7 +72,7 @@ Every command has an alias. Some highlights:
 |---------|-------|-------|
 | `generate` | `gen` | Accepts positional prompts |
 | `improve` | `imp` | Enhances prompts and supports `-o` to save |
-| `edit` | `ed` | Variadic `-i/--image` inputs with rich instructions |
+| `edit` | `ed` | Variadic `-i/--image` inputs with rich prompts |
 | `merge` | `mg` | Blend or align images via `--layout` |
 | `caption` | `cap` | Reverse-prompt or caption existing assets |
 | `config` | `cfg` | Initialize, inspect, or update settings |
