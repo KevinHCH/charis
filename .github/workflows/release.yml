@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           VERSION="${GITHUB_REF_NAME}"
-          ARCH="${RUNNER_ARCH,,}"
+          ARCH=$(echo "${RUNNER_ARCH}" | tr '[:upper:]' '[:lower:]')
           BINARY_NAME="charis${{ matrix.extension }}"
           TARGET_NAME="charis-${VERSION}-${{ matrix.platform }}-${ARCH}${{ matrix.extension }}"
           mv "$BINARY_NAME" "dist/$TARGET_NAME"
