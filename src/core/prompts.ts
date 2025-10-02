@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
+import { extractText } from '../providers/geminiUtils';
 
 const SYSTEM_PROMPT = `Task: Rewrite a prompt for image generation.
 Guidelines:
@@ -7,9 +8,9 @@ Guidelines:
 - Avoid vague language. Return a single final prompt.`;
 
 export async function improvePrompt(apiKey: string, model: string, userPrompt: string, style?: string): Promise<string> {
-  const client = new GoogleGenerativeAI(apiKey);
-  const generativeModel = client.getGenerativeModel({ model });
-  const res = await generativeModel.generateContent({
+  const client = new GoogleGenAI({ apiKey });
+  const response = await client.models.generateContent({
+    model,
     contents: [
       {
         role: 'user',
@@ -17,13 +18,10 @@ export async function improvePrompt(apiKey: string, model: string, userPrompt: s
           { text: SYSTEM_PROMPT },
           { text: `User prompt: ${userPrompt}` },
           { text: `Additional style: ${style ?? ''}` },
-        ]
-      }
-    ]
+        ],
+      },
+    ],
   });
-  const text = res?.response?.candidates?.flatMap(candidate => candidate.content?.parts ?? [])
-    .map(part => (part as any).text || '')
-    .join(' ')
-    .trim();
-  return text?.length ? text : userPrompt;
+  const text = extractText(response);
+  return text.length ? text : userPrompt;
 }

@@ -1,65 +1,46 @@
 import { generateText } from 'ai';
 import { createGoogleGenerativeAI, type GoogleGenerativeAIProvider } from '@ai-sdk/google';
-import { GoogleGenerativeAI, type GenerateContentResult } from '@google/generative-ai';
-import { ImageProvider, GenerateOpts, EditOpts, type ImgFormat } from './provider';
+import { ImageProvider, GenerateOpts, EditOpts } from './provider';
 import { withRetry } from '../core/retry';
 import { logger } from '../core/logger';
-
-const DEFAULT_MODEL = 'gemini-2.0-flash';
+import { GEMINI_DEFAULT_IMAGE_MODEL } from '../constants';
+import { formatToMimeType } from './geminiUtils';
 
 export class VercelGeminiProvider implements ImageProvider {
   readonly name = 'vercel-gemini';
-  private model = DEFAULT_MODEL;
+  private model = GEMINI_DEFAULT_IMAGE_MODEL;
   private googleProvider?: GoogleGenerativeAIProvider;
-  private native?: GoogleGenerativeAI;
 
   setModel(model: string) {
-    this.model = model || DEFAULT_MODEL;
+    this.model = model || GEMINI_DEFAULT_IMAGE_MODEL;
   }
 
   setApiKey(key: string) {
     this.googleProvider = createGoogleGenerativeAI({ apiKey: key });
-    this.native = new GoogleGenerativeAI(key);
   }
 
   async generate(opts: GenerateOpts): Promise<Buffer[]> {
-    try {
-      const response = await this.generateViaVercel(opts);
-      const expected = opts.n ?? 1;
-      if (response.length >= expected) {
-        return response;
-      }
-      logger.warn({ expected, actual: response.length }, 'Vercel AI SDK returned fewer images than requested, falling back to Gemini native SDK.');
-    } catch (error) {
-      logger.warn({ err: error }, 'Falling back to Gemini native SDK for image generation.');
+    const buffers = await this.generateViaVercel(opts);
+    if (!buffers.length) {
+      throw new Error('Vercel AI SDK returned no images.');
     }
-    return withRetry(() => this.generateNative(opts));
+    return buffers;
   }
 
   async edit(opts: EditOpts): Promise<Buffer[]> {
-    try {
-      const response = await this.editViaVercel(opts);
-      if (response.length) {
-        return response;
-      }
-      logger.warn('Vercel AI SDK returned no edited images, falling back to Gemini native SDK.');
-    } catch (error) {
-      logger.warn({ err: error }, 'Falling back to Gemini native SDK for image editing.');
+    const buffers = await this.editViaVercel(opts);
+    if (!buffers.length) {
+      throw new Error('Vercel AI SDK returned no edited images.');
     }
-    return withRetry(() => this.editNative(opts));
+    return buffers;
   }
 
   async caption(opts: { image: Buffer }): Promise<string> {
-    try {
-      const text = await this.captionViaVercel(opts);
-      if (text) {
-        return text;
-      }
-      logger.warn('Vercel AI SDK returned an empty caption, falling back to Gemini native SDK.');
-    } catch (error) {
-      logger.warn({ err: error }, 'Falling back to Gemini native SDK for caption generation.');
+    const text = await this.captionViaVercel(opts);
+    if (!text.trim()) {
+      throw new Error('Vercel AI SDK returned an empty caption.');
     }
-    return withRetry(() => this.captionNative(opts));
+    return text.trim();
   }
 
   async removeBackground?(opts: { image: Buffer }): Promise<Buffer> {
@@ -74,116 +55,89 @@ export class VercelGeminiProvider implements ImageProvider {
 
   private async generateViaVercel(opts: GenerateOpts): Promise<Buffer[]> {
     const provider = this.assertGoogle();
-    const response = await withRetry(() =>
-      generateText({
-        model: provider(this.model),
-        prompt: opts.prompt,
-        providerOptions: asRecord(opts.providerOpts),
-      } as any),
-    );
-    return extractBuffersFromFiles(response, opts.n ?? 1);
+    const total = Math.max(1, opts.n ?? 1);
+    const buffers: Buffer[] = [];
+    for (let attempt = 0; attempt < total; attempt += 1) {
+      const response = await withRetry(() =>
+        generateText({
+          model: provider(this.model),
+          prompt: opts.prompt,
+          providerOptions: asRecord(opts.providerOpts),
+        } as any),
+      );
+      const chunk = extractBuffersFromFiles(response, 1);
+      if (chunk.length === 0) {
+        break;
+      }
+      for (const buffer of chunk) {
+        buffers.push(buffer);
+        if (buffers.length >= total) {
+          break;
+        }
+      }
+      if (buffers.length >= total) {
+        break;
+      }
+    }
+    if (total > 1 && buffers.length < total) {
+      logger.warn({ expected: total, actual: buffers.length }, 'Vercel AI SDK returned fewer images than requested across all attempts.');
+    }
+    return buffers;
   }
 
   private async editViaVercel(opts: EditOpts): Promise<Buffer[]> {
     const provider = this.assertGoogle();
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: opts.instruction },
+          ...opts.images.map(image => ({
+            type: 'image',
+            image: toUint8Array(image),
+            mediaType: formatToMimeType(opts.format),
+          })),
+        ],
+      },
+    ];
     const response = await withRetry(() =>
       generateText({
         model: provider(this.model),
-        prompt: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: opts.instruction },
-              ...opts.images.map(image => ({
-                type: 'image',
-                image,
-                mediaType: formatToMimeType(opts.format),
-              })),
-            ],
-          },
-        ],
+        messages: messages as any,
         providerOptions: asRecord(opts.providerOpts),
       } as any),
     );
-    return extractBuffersFromFiles(response, opts.images.length);
+    const buffers = extractBuffersFromFiles(response, 1);
+    logger.debug({ provider: this.name, count: buffers.length }, 'Vercel edit result buffers');
+    return buffers;
   }
 
   private async captionViaVercel(opts: { image: Buffer }): Promise<string> {
     const provider = this.assertGoogle();
+    const messages = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Describe this image in one clear sentence. Reply with the caption only—no code blocks, markdown, or extra commentary.',
+          },
+          { type: 'image', image: toUint8Array(opts.image), mediaType: 'image/png' },
+        ],
+      },
+    ];
     const response = await withRetry(() =>
       generateText({
         model: provider(this.model),
-        prompt: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Provide a concise caption for this image.' },
-              { type: 'image', image: opts.image, mediaType: 'image/png' },
-            ],
-          },
-        ],
+        messages: messages as any,
       } as any),
     );
-    const text = (response as any)?.text;
-    if (typeof text === 'string' && text.trim().length > 0) {
-      return text.trim();
+    logger.debug({ response: summarizeResponse(response) }, 'Vercel caption response');
+    const text = extractAssistantText(response);
+    if (!text.trim()) {
+      throw new Error('Vercel AI SDK did not return caption text.');
     }
-    return '';
-  }
-
-  private async generateNative(opts: GenerateOpts): Promise<Buffer[]> {
-    const model = this.assertNative().getGenerativeModel({ model: this.model });
-    const expected = Math.max(1, opts.n ?? 1);
-    const res = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: opts.prompt }],
-        },
-      ],
-      generationConfig: {
-        candidateCount: expected,
-        responseMimeType: formatToMimeType(opts.format),
-      },
-    });
-
-    return extractImageBuffersFromGemini(res, expected);
-  }
-
-  private async editNative(opts: EditOpts): Promise<Buffer[]> {
-    const model = this.assertNative().getGenerativeModel({ model: this.model });
-    const parts = [
-      ...opts.images.map(image => ({
-        inlineData: {
-          data: image.toString('base64'),
-          mimeType: formatToMimeType(opts.format),
-        },
-      })),
-      { text: opts.instruction },
-    ];
-    const expected = Math.max(1, opts.images.length);
-    const res = await model.generateContent({
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        candidateCount: expected,
-        responseMimeType: formatToMimeType(opts.format),
-      },
-    });
-    return extractImageBuffersFromGemini(res, expected);
-  }
-
-  private async captionNative(opts: { image: Buffer }): Promise<string> {
-    const model = this.assertNative().getGenerativeModel({ model: this.model });
-    const parts = [
-      {
-        inlineData: {
-          data: opts.image.toString('base64'),
-          mimeType: 'image/png',
-        },
-      },
-    ];
-    const res = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    return extractTextFromGemini(res);
+    return text.trim();
   }
 
   private assertGoogle(): GoogleGenerativeAIProvider {
@@ -191,13 +145,6 @@ export class VercelGeminiProvider implements ImageProvider {
       throw new Error('Vercel AI SDK provider is not initialized. Did you configure the API key?');
     }
     return this.googleProvider;
-  }
-
-  private assertNative(): GoogleGenerativeAI {
-    if (!this.native) {
-      throw new Error('Gemini native SDK is not initialized. Did you configure the API key?');
-    }
-    return this.native;
   }
 }
 
@@ -213,6 +160,29 @@ function extractBuffersFromFiles(result: unknown, expected: number): Buffer[] {
     if (typeof file.data === 'string') {
       buffers.push(Buffer.from(file.data, 'base64'));
       continue;
+    }
+    if (file.data instanceof Uint8Array) {
+      buffers.push(Buffer.from(file.data));
+      continue;
+    }
+    if (Array.isArray(file.data)) {
+      buffers.push(Buffer.from(file.data));
+      continue;
+    }
+    if (file?.data && typeof file.data === 'object') {
+      const inner = (file.data as any).data;
+      if (typeof inner === 'string') {
+        buffers.push(Buffer.from(inner, 'base64'));
+        continue;
+      }
+      if (inner instanceof Uint8Array) {
+        buffers.push(Buffer.from(inner));
+        continue;
+      }
+      if (Array.isArray(inner)) {
+        buffers.push(Buffer.from(inner));
+        continue;
+      }
     }
     if (file.uint8Array instanceof Uint8Array) {
       buffers.push(Buffer.from(file.uint8Array));
@@ -247,7 +217,8 @@ function extractBuffersFromFiles(result: unknown, expected: number): Buffer[] {
     if (typeof file.url === 'string') {
       logger.warn({ url: file.url }, 'Gemini returned an image URL. Download it manually to use the asset.');
     } else {
-      logger.warn({ file }, 'Unrecognized Gemini image payload.');
+      const summary = summarizeUnknownFile(file);
+      logger.warn(summary, 'Unrecognized Gemini image payload.');
     }
   }
   if (buffers.length === 0) {
@@ -263,42 +234,126 @@ function asRecord(value: Record<string, unknown> | undefined): Record<string, un
   return value ?? {};
 }
 
-function formatToMimeType(format: ImgFormat | undefined): string {
-  switch (format) {
-    case 'jpg':
-      return 'image/jpeg';
-    case 'webp':
-      return 'image/webp';
-    default:
-      return 'image/png';
-  }
+function toUint8Array(buffer: Buffer | Uint8Array): Uint8Array {
+  return buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 }
 
-function extractImageBuffersFromGemini(res: GenerateContentResult, expected: number): Buffer[] {
-  const data = res?.response?.candidates?.flatMap(candidate => candidate.content?.parts ?? []) ?? [];
-  const buffers: Buffer[] = [];
-  for (const part of data) {
-    const inline = (part as any).inlineData;
-    const fileData = (part as any).fileData;
-    if (inline?.data) {
-      buffers.push(Buffer.from(inline.data, 'base64'));
-    } else if (fileData?.fileUri) {
-      logger.warn({ uri: fileData.fileUri }, 'Gemini returned a file URI. Manual download is required.');
+function extractAssistantText(result: unknown): string {
+  if (!result) {
+    return '';
+  }
+  const direct = typeof (result as any).text === 'string' ? (result as any).text.trim() : '';
+  if (direct) {
+    return direct;
+  }
+
+  const fromMessages = collectFromMessages(
+    (result as any).response?.messages ?? (result as any).responseMessages ?? (result as any).messages,
+  );
+  if (fromMessages) {
+    return fromMessages;
+  }
+
+  const steps = Array.isArray((result as any).steps) ? (result as any).steps : [];
+  for (const step of steps) {
+    const text = collectFromMessages((step as any)?.response?.messages ?? (step as any)?.messages);
+    if (text) {
+      return text;
     }
   }
-  if (buffers.length === 0) {
-    logger.warn('Gemini did not return any image buffers.');
-  }
-  if (buffers.length < expected) {
-    logger.warn({ expected, actual: buffers.length }, 'Gemini returned fewer images than requested.');
-  }
-  return buffers;
+  return '';
 }
 
-function extractTextFromGemini(res: GenerateContentResult): string {
-  const text = res?.response?.candidates?.flatMap(candidate => candidate.content?.parts ?? [])
-    .map(part => (part as any).text || '')
-    .join(' ')
-    .trim();
-  return text ?? '';
+function collectFromMessages(messages: unknown): string {
+  if (!Array.isArray(messages)) {
+    return '';
+  }
+  const parts: string[] = [];
+  for (const message of messages) {
+    if (!message) continue;
+    const role = (message as any).role;
+    if (role && role !== 'assistant') continue;
+    const content = (message as any).content;
+    if (typeof content === 'string' && content.trim()) {
+      parts.push(content.trim());
+      continue;
+    }
+    if (Array.isArray(content)) {
+      for (const item of content) {
+        if (!item) continue;
+        if (item.type === 'text' && typeof item.text === 'string' && item.text.trim()) {
+          parts.push(item.text.trim());
+        }
+      }
+    }
+  }
+  const joined = parts.join(' ').trim();
+  return joined;
+}
+
+function summarizeUnknownFile(file: unknown): Record<string, unknown> {
+  if (!file || typeof file !== 'object') {
+    return { fileType: typeof file };
+  }
+  const value = file as Record<string, unknown>;
+  const keys = Object.keys(value);
+  const summary: Record<string, unknown> = { keys };
+  if ('data' in value) {
+    summary.dataType = Array.isArray(value.data)
+      ? 'array'
+      : value.data instanceof Uint8Array
+        ? 'uint8array'
+        : typeof value.data;
+    if (Array.isArray(value.data) || value.data instanceof Uint8Array) {
+      summary.dataLength = (value.data as { length: number }).length;
+    } else if (value.data && typeof value.data === 'object' && 'data' in (value.data as any)) {
+      const inner: any = (value.data as any).data;
+      summary.nestedDataType = Array.isArray(inner)
+        ? 'array'
+        : inner instanceof Uint8Array
+          ? 'uint8array'
+          : typeof inner;
+      if (Array.isArray(inner) || inner instanceof Uint8Array) {
+        summary.nestedDataLength = inner.length;
+      }
+    }
+  }
+  if ('uint8Array' in value && value.uint8Array instanceof Uint8Array) {
+    summary.uint8ArrayLength = value.uint8Array.length;
+  }
+  if ('arrayBuffer' in value && value.arrayBuffer instanceof ArrayBuffer) {
+    summary.arrayBufferByteLength = value.arrayBuffer.byteLength;
+  }
+  return summary;
+}
+
+function summarizeResponse(response: unknown): Record<string, unknown> {
+  const summary: Record<string, unknown> = {};
+  if (!response || typeof response !== 'object') {
+    summary.type = typeof response;
+    return summary;
+  }
+  const value = response as Record<string, unknown>;
+  if (typeof value.text === 'string') {
+    summary.text = value.text.slice(0, 200);
+  }
+  if (Array.isArray(value.responseMessages)) {
+    summary.responseMessages = value.responseMessages.length;
+  }
+  if (Array.isArray((value.response as any)?.messages)) {
+    summary.responseMessagesV2 = (value.response as any).messages.length;
+  }
+  if (Array.isArray(value.messages)) {
+    summary.messages = value.messages.length;
+  }
+  if (Array.isArray(value.steps)) {
+    summary.steps = value.steps.length;
+  }
+  if ((response as any)?.warnings) {
+    summary.warnings = (response as any).warnings;
+  }
+  if ((response as any)?.finishReason) {
+    summary.finishReason = (response as any).finishReason;
+  }
+  return summary;
 }

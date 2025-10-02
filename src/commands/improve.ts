@@ -5,6 +5,7 @@ import { loadConfig } from '../config/config';
 import { getApiKey } from '../config/keychain';
 import { ensurePrompt } from '../core/validation';
 import { improvePrompt } from '../core/prompts';
+import { GEMINI_DEFAULT_IMAGE_MODEL, GEMINI_DEFAULT_TEXT_MODEL } from '../constants';
 
 export function registerImprove(program: Command) {
   program
@@ -24,7 +25,8 @@ export function registerImprove(program: Command) {
 
       const promptFromArgs = promptWords.join(' ').trim();
       const prompt = ensurePrompt(options.prompt ?? promptFromArgs);
-      const improved = await improvePrompt(apiKey, cfg.model, prompt, options.style);
+      const model = cfg.model === GEMINI_DEFAULT_IMAGE_MODEL ? GEMINI_DEFAULT_TEXT_MODEL : cfg.model;
+      const improved = await improvePrompt(apiKey, model, prompt, options.style);
       if (options.save) {
         await writeFile(options.save, improved, 'utf8');
         console.log(`${chalk.green('✔')} saved ${chalk.cyan(options.save)}`);

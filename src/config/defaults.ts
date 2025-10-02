@@ -1,8 +1,9 @@
 import { AppConfig } from './config';
+import { GEMINI_DEFAULT_IMAGE_MODEL } from '../constants';
 
 export const DEFAULT_CONFIG: AppConfig = {
   provider: 'gemini',
-  model: 'gemini-2.0-flash',
+  model: GEMINI_DEFAULT_IMAGE_MODEL,
   outputDir: './generated-images',
   format: 'png',
   quality: 95,
