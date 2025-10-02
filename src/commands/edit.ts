@@ -6,8 +6,8 @@ import { getApiKey } from '../config/keychain';
 import { defaultOutputDir, makeFilename } from '../core/paths';
 import { parseNumber, parseSize } from '../core/validation';
 import { readInputImages } from '../image/io';
-import { VercelGeminiProvider } from '../providers/vercelGemini';
 import { writeHistory } from '../core/history';
+import { createGeminiChain, tryProviders } from '../providers/chain';
 
 export function registerEdit(program: Command) {
   program
@@ -36,11 +36,13 @@ export function registerEdit(program: Command) {
 
       const buffers = await readInputImages(images);
 
-      const provider = new VercelGeminiProvider();
-      provider.setApiKey(apiKey);
-      provider.setModel(cfg.model);
-
-      const outputs = await provider.edit({ images: buffers, instruction, size, format, quality });
+      const providers = createGeminiChain(apiKey, { nativeModel: cfg.model, vercelModel: cfg.model });
+      const { result: outputs } = await tryProviders(
+        providers,
+        p => p.edit({ images: buffers, instruction, size, format, quality }),
+        output => Array.isArray(output) && output.length > 0,
+        'image editing',
+      );
       await mkdir(outDir, { recursive: true });
       const saved: string[] = [];
       let seq = 1;

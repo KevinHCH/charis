@@ -2,20 +2,6 @@ import chalk from 'chalk';
 import pino from 'pino';
 import pinoPretty from 'pino-pretty';
 
-type LevelStyle = {
-  readonly label: string;
-  readonly color: (text: string) => string;
-};
-
-const levelStyles: Record<number, LevelStyle> = {
-  10: { label: 'TRACE', color: chalk.gray },
-  20: { label: 'DEBUG', color: chalk.magenta },
-  30: { label: 'INFO', color: chalk.green },
-  40: { label: 'WARN', color: chalk.yellow },
-  50: { label: 'DANGER', color: chalk.red },
-  60: { label: 'FATAL', color: chalk.bgRed.white },
-};
-
 const ignoredKeys = new Set(['level', 'time', 'pid', 'hostname', 'name']);
 
 function formatValue(value: unknown): string {
@@ -68,15 +54,10 @@ const prettyStream = pinoPretty({
   translateTime: 'SYS:standard',
   singleLine: true,
   messageFormat(log, messageKey) {
-    const style = levelStyles[log.level as number] || {
-      label: (log.level as number | undefined)?.toString() ?? 'LOG',
-      color: chalk.white,
-    };
-    const levelBadge = style.color(`[${style.label}]`);
     const message = log[messageKey] ?? '';
     const meta = formatMeta(log, messageKey);
     const errorBlock = formatError(log.err ?? log.error);
-    return `${levelBadge} ${message}${meta}${errorBlock}`.trimEnd();
+    return `${message}${meta}${errorBlock}`.trimEnd();
   },
 });
 

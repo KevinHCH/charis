@@ -5,9 +5,9 @@ import { loadConfig } from '../config/config';
 import { getApiKey } from '../config/keychain';
 import { defaultOutputDir, makeFilename } from '../core/paths';
 import { ensurePrompt, parseNumber, parseSize } from '../core/validation';
-import { VercelGeminiProvider } from '../providers/vercelGemini';
 import { writeHistory } from '../core/history';
 import { logger } from '../core/logger';
+import { createGeminiChain, tryProviders } from '../providers/chain';
 
 export function registerGenerate(program: Command) {
   program
@@ -52,12 +52,14 @@ export function registerGenerate(program: Command) {
       const quality = parseNumber(options.quality, cfg.quality);
       const outDir = options.out ?? defaultOutputDir(process.cwd(), cfg.outputDir);
 
-      const provider = new VercelGeminiProvider();
-      provider.setApiKey(apiKey);
-      provider.setModel(cfg.model);
-
       logger.info({ prompt, n, size, format, quality }, 'Generating images with Gemini');
-      const buffers = await provider.generate({ prompt, n, size, format, quality });
+      const providers = createGeminiChain(apiKey, { nativeModel: cfg.model, vercelModel: cfg.model });
+      const { result: buffers } = await tryProviders(
+        providers,
+        p => p.generate({ prompt, n, size, format, quality }),
+        output => Array.isArray(output) && output.length > 0,
+        'image generation',
+      );
 
       await mkdir(outDir, { recursive: true });
       const saved: string[] = [];
