@@ -19,7 +19,7 @@ export class GeminiNativeProvider implements ImageProvider {
   }
 
   async generate(opts: GenerateOpts): Promise<Buffer[]> {
-    return withRetry(() => this.generateNative(opts));
+    return this.generateNative(opts);
   }
 
   async edit(opts: EditOpts): Promise<Buffer[]> {
@@ -41,20 +41,41 @@ export class GeminiNativeProvider implements ImageProvider {
   }
 
   private async generateNative(opts: GenerateOpts): Promise<Buffer[]> {
-    const expected = Math.max(1, opts.n ?? 1);
-    const response = await this.assertNative().models.generateContent({
-      model: this.model,
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: opts.prompt }],
-        },
-      ],
-      config: {
-        responseModalities: [Modality.IMAGE],
-      },
-    });
-    return extractImageBuffers(response, expected);
+    const total = Math.max(1, opts.n ?? 1);
+    const collected: Buffer[] = [];
+    while (collected.length < total) {
+      const response = await withRetry(() =>
+        this.assertNative().models.generateContent({
+          model: this.model,
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: opts.prompt }],
+            },
+          ],
+          config: {
+            responseModalities: [Modality.IMAGE],
+          },
+        }),
+      );
+      const chunk = extractImageBuffers(response, 1);
+      if (chunk.length === 0) {
+        break;
+      }
+      for (const buffer of chunk) {
+        collected.push(buffer);
+        if (collected.length >= total) {
+          break;
+        }
+      }
+    }
+    if (total > 1 && collected.length < total) {
+      logger.warn(
+        { expected: total, actual: collected.length },
+        'Gemini native SDK returned fewer images than requested across retries.',
+      );
+    }
+    return collected;
   }
 
   private async editNative(opts: EditOpts): Promise<Buffer[]> {

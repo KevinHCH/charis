@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./img/charis_logo.png" width="auto" height="100%" align="center"/>
+</p>
+
 # Charis CLI
 
 Charis is a command-line tool built with Bun + TypeScript that integrates Gemini through the Vercel AI SDK for image generation and editing.
